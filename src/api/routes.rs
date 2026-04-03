@@ -10,6 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use rand::{distributions::Alphanumeric, Rng};
+
 use crate::{
     config::AppConfig,
     crypto::Crypto,
@@ -20,9 +21,9 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AppState {
-    pub storage::Arc<dyn StorageBackend>,
-    pub crypto::Arc<Crypto>,
-    pub cfg:: AppConfig,
+    pub storage: Arc<dyn StorageBackend>,
+    pub crypto: Arc<Crypto>,
+    pub cfg: AppConfig,
 }
 
 impl FromRef<AppState> for AppConfig {
@@ -51,19 +52,19 @@ pub fn build_router(
 #[derive(Deserialize)]
 pub struct TokenizeRequest {
     pub id: String,
-    pub data: Value, // object with tokens 
+    pub data: Value, // expect object
 }
 
 #[derive(Serialize)]
 pub struct TokenizeResponse {
     pub id: String,
-    pub data: Value, // object with tokens 
+    pub data: Value, // object with tokens
 }
 
 #[derive(Deserialize)]
 pub struct DetokenizeRequest {
     pub id: String,
-    pub data: Value, // object with tokens 
+    pub data: Value, // Object with tokens
 }
 
 #[derive(Serialize)]
@@ -76,8 +77,7 @@ pub async fn tokenize(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<TokenizeRequest>,
-) -> Result<(axum::http::StatusCode, Json<TokenizeResponse>), VaultError> 
-{
+) -> Result<(axum::http::StatusCode, Json<TokenizeResponse>), VaultError> {
     check_api_key(&headers, &state.cfg, Operation::Tokenize)?;
 
     let obj = req.data.as_object().ok_or_else(|| {
@@ -85,37 +85,36 @@ pub async fn tokenize(
     })?;
 
     let mut resp_map = serde_json::Map::new();
-   
+
     for (field, value) in obj {
         let plaintext = value
             .as_str()
-            .ok_or_else(|| VaultError::BadRequest(
-                "all fields must be strings".into()
-            ))?;
-    
+            .ok_or_else(|| VaultError::BadRequest("all fields must be strings".into()))?;
 
-    let token: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(16)
-        .map(char::from)
-        .collect();
+        let token: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
 
-    let aad = format!("{}:{}", req.id, field);
-    let chipertext = state
-        .crypto
-        .encrypt(plaintext.as_bytes(), aad.as_bytes())?;
-        
-    state
-        .storage
-        .store(&token, ciphertext)
-        .await?;
+        let aad = format!("{}:{}", req.id, field);
+        let ciphertext = state
+            .crypto
+            .encrypt(plaintext.as_bytes(), aad.as_bytes())?;
 
-    resp_map.insert(field.clone(), json!(token));
+        state
+            .storage
+            .store(&token, ciphertext)
+            .await?;
+
+        resp_map.insert(field.clone(), json!(token));
+    }
 
     let resp = TokenizeResponse {
         id: req.id,
         data: Value::Object(resp_map),
     };
+
     Ok((axum::http::StatusCode::CREATED, Json(resp)))
 }
 

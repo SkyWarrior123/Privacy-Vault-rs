@@ -1,4 +1,4 @@
 mod routes;
 
-pub use routes::build_routes;
+pub use routes::build_router;
 

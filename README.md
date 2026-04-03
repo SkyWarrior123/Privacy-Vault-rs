@@ -117,4 +117,6 @@ The vault can use either in‑memory storage or Redis.
 - **In‑memory**: good for Step 1 and quick tests.
 - **Redis**: good for Step 2 and persistence, storing `token -> ciphertext` mappings.
 
-You control the backend via environment variables (described in the next commit).
+```sh
+docker run --name vault-redis -p 6379:6379 -d redis:7
+```
